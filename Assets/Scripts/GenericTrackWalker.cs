@@ -80,11 +80,12 @@ public class GenericTrackWalker : MonoBehaviour, IDamagableInterface
     private RaycastHit2D[] hitList;
     Vector2 forward;
     private float previousAttackTime = float.MinValue;
-
+    private bool criticalDeath = false;
+    private bool arrow = true;
     //PREFAB VALUES
     [Header("Values to be set in prefab")]
     public List<WalkerColliderPart> myColliders;
-    public BoxCollider2D trackCollider;
+    //public BoxCollider2D trackCollider;
 
     public virtual void Start()
     {
@@ -256,13 +257,17 @@ public class GenericTrackWalker : MonoBehaviour, IDamagableInterface
     public void ArrowHit(int ArrowDmg, Collider2D col)
     {
         WalkerColliderPart hitPart = myColliders.Where(p => p.collider == col).First();
+        arrow = true;
         switch (hitPart.partType)
         {
             case WalkerColliderPartType.Body:
                 ReceiveDamage(ArrowDmg);
+
                 break;
             case WalkerColliderPartType.CritBody:
+                criticalDeath = true;
                 ReceiveDamage(ArrowDmg*2);
+                
                 break;
             case WalkerColliderPartType.Shield:
                 break;
@@ -280,32 +285,60 @@ public class GenericTrackWalker : MonoBehaviour, IDamagableInterface
     {
         Debug.Log("RECEIVED DAMAGE");
         currentHealth -= damage;
-        CheckIfDead();
-    }
-
-    void CheckIfDead()
-    {
-        if (currentHealth <= 0)
+        if (!CheckIfDead())
         {
-            Die();
+            if (arrow)
+            {
+                genericWalkerAnimator.SetTrigger("ReceiveArrow");
+            }
+            else
+            {
+                genericWalkerAnimator.SetTrigger("ReceiveMelee");
+            }
         }
     }
 
-    void Die()
+    bool CheckIfDead()
+    {
+        if (currentHealth <= 0)
+        {
+           
+            Die(criticalDeath);
+            return true;
+        }
+        else
+        {
+            criticalDeath = false;
+            return false;
+        }
+    }
+
+    public void Die(bool _criticalDeath)
     {
         foreach (WalkerColliderPart part in myColliders)
         {
             part.collider.enabled = false;
         }
-        genericWalkerAnimator.SetTrigger("Die");
+        if (_criticalDeath)
+        {
+            genericWalkerAnimator.SetTrigger("DramaticDeath");
+        }
+        else
+        {
+            genericWalkerAnimator.SetTrigger("Die");
+        }
+        
         alive = false;
+        if(myType == WalkerType.Enemy)
+            UnitSpawnManager.instance.EnemyDied();
        // GetComponentInChildren<SpriteRenderer>().color = Color.black;
-        trackCollider.enabled = false;
+       // trackCollider.enabled = false;
     }
 
     //CALEED WHEN RECEIVEING DAMAGE
     public void NormalHit(int attackDamage, Collider2D col)
     {
+        arrow = false;
         ReceiveDamage(attackDamage);
     }
 }

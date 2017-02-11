@@ -8,25 +8,35 @@ using System;
 //ENUM FOR EVENTS
 public enum enumEvents
 {
-    AtoB,
-    BtoA,
-    BtoC,
-    CtoB,
-    AtoC,
-    CtoA
+    OnShowIntro,
+    OnIntroEnd,
+    OnQuickGame,
+    OnNextWave,
+    OnWaveEnd,
+    OnPauseMenu,
+    OnContinueUpgrade,
+    OnContinueWave,
+    OnGameFinish,
+    OnGameExit
 }
 //ENUM FOR STATES
 public enum enumStates
 {
-    A,
-    B,
-    C
+    ENTRY,
+    IntroLogo,
+    MainMenu,
+    GameIntro,
+    Wave,
+    UpgradeMenu,
+    Pause,
+    GameFinished,
+    QUIT
 }
 public class GameController : MonoBehaviour {
     public List<Transform> spawnPoints;
+    private int currentSpawnPoint = 0;
+    public readonly int startingLives = 15;
 
-    List<AirConsolePlayer> activePlayers;
-    List<AirConsolePlayer> disconectedPlayers;
     public PlayerController player1;
 
     [Header("References")]
@@ -36,80 +46,179 @@ public class GameController : MonoBehaviour {
     [Header("Settings")]
     public float arrowSpeed;
 
-    void OnEnable()
+    private bool wonQuickGame = false;
+    private int livesLeft;
+
+    private static GameController _instance;
+    public static GameController instance
     {
-        SetupAirconsoleCallbacks();
+        get
+        {
+            if (_instance == null)
+            {
+                _instance = FindObjectOfType<GameController>();
+            }
+            return _instance;
+        }
     }
 
-    void OnDisable()
+    public void InitFsm()
+    {
+        ManagerFSM.AddAllStates();
+        ManagerFSM.AddEventConsequence(enumStates.ENTRY, enumEvents.OnShowIntro, enumStates.IntroLogo);
+        ManagerFSM.AddEventConsequence(enumStates.IntroLogo, enumEvents.OnIntroEnd, enumStates.MainMenu);
+        ManagerFSM.AddEventConsequence(enumStates.MainMenu, enumEvents.OnQuickGame, enumStates.GameIntro);
+        ManagerFSM.AddEventConsequence(enumStates.GameIntro, enumEvents.OnNextWave, enumStates.Wave);
+        ManagerFSM.AddEventConsequence(enumStates.Wave, enumEvents.OnWaveEnd, enumStates.UpgradeMenu);
+        ManagerFSM.AddEventConsequence(enumStates.UpgradeMenu, enumEvents.OnNextWave, enumStates.Wave);
+        ManagerFSM.AddEventConsequence(enumStates.UpgradeMenu, enumEvents.OnPauseMenu, enumStates.Pause);
+        ManagerFSM.AddEventConsequence(enumStates.Wave, enumEvents.OnPauseMenu, enumStates.Pause);
+        ManagerFSM.AddEventConsequence(enumStates.Wave, enumEvents.OnGameFinish, enumStates.GameFinished);
+        ManagerFSM.AddEventConsequence(enumStates.Wave, enumEvents.OnGameExit, enumStates.MainMenu);
+        ManagerFSM.AddEventConsequence(enumStates.GameFinished, enumEvents.OnGameExit, enumStates.MainMenu);
+        ManagerFSM.AddEventConsequence(enumStates.GameFinished, enumEvents.OnQuickGame, enumStates.GameIntro);
+        ManagerFSM.AddEventConsequence(enumStates.Pause, enumEvents.OnQuickGame, enumStates.GameIntro);
+        ManagerFSM.AddEventConsequence(enumStates.MainMenu, enumEvents.OnGameExit, enumStates.QUIT);
+        ManagerFSM.AddOnEnterCall(enumStates.MainMenu, OnMainMenuEnter);
+        ManagerFSM.AddOnExitCall(enumStates.MainMenu, OnMainMenuExit);
+        ManagerFSM.AddOnEnterCall(enumStates.IntroLogo, OnIntroEnter);
+        ManagerFSM.AddOnExitCall(enumStates.IntroLogo, OnIntroExit);
+        ManagerFSM.AddOnEnterCall(enumStates.GameIntro, OnGameIntroEnter);
+        ManagerFSM.AddOnExitCall(enumStates.GameIntro, OnGameIntroExit);
+        ManagerFSM.AddOnEnterCall(enumStates.Wave, OnWaveEnter);
+        ManagerFSM.AddOnExitCall(enumStates.Wave, OnWaveExit);
+        ManagerFSM.AddOnEnterCall(enumStates.UpgradeMenu, OnUpgradeMenuEnter);
+        ManagerFSM.AddOnExitCall(enumStates.UpgradeMenu, OnUpgradeMenuExit);
+        ManagerFSM.AddOnEnterCall(enumStates.GameFinished, OnGameFinishEnter);
+        ManagerFSM.AddOnExitCall(enumStates.GameFinished, OnGameFinishExit);
+
+        ManagerFSM.ForceState(enumStates.ENTRY);
+        ManagerFSM.InvokeEvent(enumEvents.OnShowIntro);
+    }
+
+    void OnIntroEnter()
+    {
+        GuiManager.instance.ShowLogoPanel(true);
+        GuiManager.instance.HideLogoAfter(1.0f);
+    }
+
+    void OnIntroExit()
+    {
+        GuiManager.instance.ShowLogoPanel(false);
+    }
+
+    void OnMainMenuEnter()
+    {
+        GuiManager.instance.ShowMainMenuPanel(true);
+    }
+
+    void OnMainMenuExit()
+    {
+        GuiManager.instance.ShowMainMenuPanel(false);
+    }
+
+    void OnGameIntroEnter()
+    {
+        livesLeft = startingLives;
+        wonQuickGame = false;
+        foreach (AirConsolePlayer _player in AirConsolePlayerKeeper.instance.GetAllActivePlayers())
+        {
+            InstantiateBowmanForPlayer(_player);
+        }
+        ManagerFSM.InvokeEvent(enumEvents.OnNextWave);
+    }
+
+    void OnGameIntroExit()
+    {
+        UnitSpawnManager.instance.ResetForNewGame();
+        GuiManager.instance.ShowGameRunningPanel(true);
+    }
+
+    void OnWaveEnter()
+    {
+        UnitSpawnManager.instance.StartWave();
+    }
+
+    void OnWaveExit()
+    {
+        UnitSpawnManager.instance.EndWave();
+    }
+
+    void OnUpgradeMenuEnter()
+    {
+        GuiManager.instance.ShowUpgradeMenu(true);
+    }
+
+    void OnUpgradeMenuExit()
+    {
+        GuiManager.instance.ShowUpgradeMenu(false);
+    }
+
+    void OnGameFinishEnter()
+    {
+        GuiManager.instance.ShowGameRunningPanel(false);
+        GuiManager.instance.ShowEndingPanel(true, wonQuickGame);
+       
+    }
+
+    void OnGameFinishExit()
+    {
+        GuiManager.instance.HideEndingPanel();
+    }
+
+    void OnPauseMenuEnter()
     {
 
     }
+
+    void OnPauseMenuExit()
+    {
+
+    }
+
+    void OnQUITEnter()
+    {
+
+    }
+
+
 
 	// Use this for initialization
 	void Start () {
-        activePlayers = new List<AirConsolePlayer>();
-        disconectedPlayers = new List<AirConsolePlayer>();
+        _instance = this;
+        InitFsm();
     }
 
-    void SetupAirconsoleCallbacks()
+    public void EnemyReachedHeart()
     {
-        AirConsole.instance.onConnect += PlayerConnected;
-        AirConsole.instance.onMessage += OnMessage;
-    }
-
-    void PlayerConnected(int _deviceId)
-    {
-        AirConsolePlayer p = new AirConsolePlayer(_deviceId);
-        GameObject newPlayer = Instantiate(playerPrefab, spawnPoints[activePlayers.Count].position, Quaternion.identity) as GameObject;
-        p.playerController = newPlayer.GetComponent<PlayerController>();
-        activePlayers.Add(p);
-        Debug.Log("Player with dID " + _deviceId +  "And player nubmer: "+ AirConsole.instance.ConvertDeviceIdToPlayerNumber(_deviceId) +" connected");
-    }
-
-    void OnMessage(int from, JToken data)
-    {
-        // Debug.Log("Got message:"+data.ToString()+"; from :" + from);
-        var player = activePlayers.Where(p => p.GetDeviceId() == from);
-        if(player.Count() > 0)
-            ParseInputData(data, player.First());
-    }
-
-    void ParseInputData(JToken data, AirConsolePlayer player)
-    {
-        if (data["0"] != null)
+        livesLeft--;
+        GuiManager.instance.UpdateLivesText(livesLeft);
+        if (livesLeft <= 0)
         {
-            Debug.Log("Button 0");
-        }
-        else if (data["1"] != null)
-        {
-            Debug.Log("Button 1");
-        }
-        else if (data["joystick-right"] != null)
-        {
-            bool pressed = player.holdinJoystick;
-            float x = player.prevjoystickPos.x;
-            float y = player.prevjoystickPos.y;
-
-            if (data["joystick-right"]["pressed"] != null)
-            {
-                pressed = (bool)data["joystick-right"]["pressed"];
-            }
-            if (data["joystick-right"]["message"]["x"] != null)
-            {
-                x = (float)data["joystick-right"]["message"]["x"];
-            }
-            if (data["joystick-right"]["message"]["y"] != null)
-            {
-                y = (float)data["joystick-right"]["message"]["y"];
-            }
-            HandleJoystickChange(player, pressed, new Vector2(x,y));
+            wonQuickGame = false;
+            ManagerFSM.InvokeEvent(enumEvents.OnGameFinish);
         }
     }
 
-    void HandleButtonA(AirConsolePlayer player)
+    public void wonGame()
     {
+        wonQuickGame = true;
+    }
 
+    public void InstantiateBowmanForPlayer(AirConsolePlayer _player)
+    {
+        if (_player.playerController == null)
+        {
+            GameObject newPlayer = Instantiate(playerPrefab, spawnPoints[currentSpawnPoint].position, Quaternion.identity) as GameObject;
+            _player.playerController = newPlayer.GetComponent<PlayerController>();
+            currentSpawnPoint++;
+            currentSpawnPoint = currentSpawnPoint % spawnPoints.Count;
+        }
+    }
+
+    public void HandleButtonA(AirConsolePlayer player)
+    {
+        UnitSpawnManager.instance.SpawnFriendly();
     }
 
     void HandleButtonB(AirConsolePlayer player)
@@ -117,7 +226,7 @@ public class GameController : MonoBehaviour {
 
     }
 
-    void HandleJoystickChange(AirConsolePlayer player, bool pressed, Vector2 pos)
+    public void HandleJoystickChange(AirConsolePlayer player, bool pressed, Vector2 pos)
     {
         if (player.holdinJoystick)
         {
@@ -149,13 +258,9 @@ public class GameController : MonoBehaviour {
 
     void FireArrow(AirConsolePlayer _player, Vector2 _lastJoystickPosition)
     {
+        Debug.Log("FIRE ARROW");
         Vector2 dir = new Vector2(-_lastJoystickPosition.x, _lastJoystickPosition.y);
         _player.playerController.FireArrow(arrowPrefab, _player.playerController.arrowSpawn.position, dir, arrowSpeed);
         //player1.FireArrow(arrowPrefab, player1.arrowSpawn.position, dir, arrowSpeed);
     }
-
-    // Update is called once per frame
-    void Update () {
-	
-	}
 }

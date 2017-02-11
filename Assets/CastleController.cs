@@ -3,11 +3,22 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CastleController : MonoBehaviour, IDamagableInterface {
-    public Collider2D gateCollider;
-    public Collider2D bridgeCollider;
-	// Use this for initialization
-	void Start () {
+public class CastleController : MonoBehaviour {
+    public GatePart myGate;
+    private static CastleController _instance;
+    public static CastleController instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                _instance = FindObjectOfType<CastleController>();
+            }
+            return _instance;
+        }
+    }
+    // Use this for initialization
+    void Start () {
 		
 	}
 	
@@ -16,18 +27,8 @@ public class CastleController : MonoBehaviour, IDamagableInterface {
 		
 	}
 
-    public void ReceiveDamage(int damage)
+    public void UpgradeGate()
     {
-        throw new NotImplementedException();
-    }
 
-    public void NormalHit(int attackDamage, Collider2D col)
-    {
-        throw new NotImplementedException();
-    }
-
-    public void ArrowHit(int arrowDamage, Collider2D col)
-    {
-        throw new NotImplementedException();
     }
 }

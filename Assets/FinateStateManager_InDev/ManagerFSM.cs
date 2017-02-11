@@ -7,16 +7,25 @@ using System;
 public static class ManagerFSM {
     public static HashSet<StateFSM> AllStates = new HashSet<StateFSM>();
     public static StateFSM currentState;
+    public static bool managerInited = false;
 
-    public static void AddAllStates(List<enumStates> _AllStates)
+    public static void AddAllStates()
     {
+        List<enumStates> _AllStates = Enum.GetValues(typeof(enumStates)).Cast<enumStates>().ToList();
+        Debug.Log("ALL STATES ARE : " + _AllStates);
         AllStates = new HashSet<StateFSM>();
         foreach (enumStates s in _AllStates)
         {
             StateFSM newState = new StateFSM(s);
             AllStates.Add(newState);
         }
+        managerInited = true;
     }
+    public static bool InState(enumStates _state)
+    {
+        return currentState == stateFsmFromEnumState(_state);
+    } 
+
     public static void AddOneState(enumStates _state)
     {
         AllStates.Add(new StateFSM(_state));

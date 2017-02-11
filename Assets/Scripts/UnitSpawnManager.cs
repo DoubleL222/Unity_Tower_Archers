@@ -17,9 +17,12 @@ public class UnitSpawnManager : MonoBehaviour {
     }
     public LayerMask friendlyLayerMask;
     public LayerMask enemyLayerMask;
-    public WaveScriptableObject testWave;
+    public WaveScriptableObject[] endlessModeWaves;
+    public WaveScriptableObject currentWave;
     public WalkerScriptableObject friendlyWalker;
     int groupIndex, timesPaternRepeated, patternIndex, waveIndex = 0;
+    int numberOfEnemiesInWave, enemiesDeadOrDestroyed = 0;
+    int friendlySpawns = 0;
     bool waveStarted = false;
     [Header("Spawner Settings")]
     public float timeBetweenGroups = 3;
@@ -38,23 +41,82 @@ public class UnitSpawnManager : MonoBehaviour {
         trackLeft = new EnemyWalkingTrack(sr.sprite, EnemyWalkingTrackSide.Left, sr.transform);
     }
 
-
-    public void StartWave()
+    public void ResetForNewGame()
     {
         groupIndex = 0;
         timesPaternRepeated = 0;
         patternIndex = 0;
-        waveStarted = true;
+        waveIndex = 0;
+        numberOfEnemiesInWave = 0;
+        enemiesDeadOrDestroyed = 0;
+
     }
 
-    void EndWave()
+    public void StartWave()
+    {
+        if (waveIndex >= 0 && waveIndex < endlessModeWaves.Length)
+        {
+            friendlySpawns = 0;
+            currentWave = endlessModeWaves[waveIndex];
+            int enemiesCount = 0;
+            foreach (GroupScriptableObject group in currentWave.Groups)
+            {
+                enemiesCount += group.walkerPattern.Length * group.patternRepeatTime;
+            }
+            numberOfEnemiesInWave = enemiesCount;
+            enemiesDeadOrDestroyed = 0;
+            waveIndex++;
+            groupIndex = 0;
+            timesPaternRepeated = 0;
+            patternIndex = 0;
+            waveStarted = true;
+        }
+    }
+
+    public void EnemyDied()
+    {
+        enemiesDeadOrDestroyed++;
+        if (enemiesDeadOrDestroyed == numberOfEnemiesInWave)
+        {
+            if (waveIndex >= endlessModeWaves.Length)
+            {
+                StartCoroutine(WaitAndFinishGame());
+            }
+            else
+            {
+                StartCoroutine(WaitAndFinishWave());
+            }
+             
+        }
+    }
+
+    IEnumerator WaitAndFinishWave()
+    {
+        yield return new WaitForSeconds(1.0f);
+        ManagerFSM.InvokeEvent(enumEvents.OnWaveEnd);
+        yield return null;
+    }
+
+    IEnumerator WaitAndFinishGame()
+    {
+        GameController.instance.wonGame();
+        yield return new WaitForSeconds(1.0f);
+        ManagerFSM.InvokeEvent(enumEvents.OnGameFinish);
+        yield return null;
+    }
+
+    public void EndWave()
     {
         waveStarted = false;
     }
 
-    public void SpawnFriendly(WalkerScriptableObject _friendlyWalker)
+    public void SpawnFriendly()
     {
-        InstantiateAndInitUnit(_friendlyWalker);
+        if (friendlySpawns < 3)
+        {
+            InstantiateAndInitUnit(friendlyWalker);
+            friendlySpawns++;
+        }
     }
 
     void InstantiateAndInitUnit(WalkerScriptableObject _walker)
@@ -86,32 +148,32 @@ public class UnitSpawnManager : MonoBehaviour {
         }
         if (Input.GetKeyDown(KeyCode.Return))
         {
-            UnitSpawnManager.instance.SpawnFriendly(friendlyWalker);
+            SpawnFriendly();
         }
         if (waveStarted)
         {
             if (Time.time >= nextSpawnTime)
             {
-                InstantiateAndInitUnit(testWave.Groups[groupIndex].walkerPattern[patternIndex]);
+                InstantiateAndInitUnit(currentWave.Groups[groupIndex].walkerPattern[patternIndex]);
                 patternIndex++;
                 // gtwScript.FollowTrack(0, trackLeft, 1);
 
 
                 nextSpawnTime = Time.time + timeBetweenSpawns;
                 //if full patern has bee spawned
-                if (patternIndex >= testWave.Groups[groupIndex].walkerPattern.Length)
+                if (patternIndex >= currentWave.Groups[groupIndex].walkerPattern.Length)
                 {
                     patternIndex = 0;
                     timesPaternRepeated++;
                     nextSpawnTime = Time.time + timeBetweenPatterns;
                     //if patern has been repeated enough times
-                    if (timesPaternRepeated >= testWave.Groups[groupIndex].patternRepeatTime)
+                    if (timesPaternRepeated >= currentWave.Groups[groupIndex].patternRepeatTime)
                     {
 
                         nextSpawnTime = Time.time + timeBetweenGroups;
                         groupIndex++;
 
-                        if (groupIndex >= testWave.Groups.Length)
+                        if (groupIndex >= currentWave.Groups.Length)
                         {
                             EndWave();
                         }

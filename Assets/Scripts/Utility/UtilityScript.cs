@@ -33,4 +33,18 @@ public static class UtilityScript  {
         }
     }
 
+    public static GenericTrackWalker RecursevlyLookForWalkerClass(Transform _t)
+    {
+        GenericTrackWalker searchedScript = null;
+        searchedScript = _t.gameObject.GetComponent<GenericTrackWalker>();
+        if (searchedScript == null)
+        {
+            return RecursevlyLookForWalkerClass(_t.parent);
+        }
+        else
+        {
+            return searchedScript;
+        }
+    }
+
 }

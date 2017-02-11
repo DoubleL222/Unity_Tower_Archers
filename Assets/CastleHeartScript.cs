@@ -10,7 +10,11 @@ public class CastleHeartScript : MonoBehaviour {
         Debug.Log("On trigger EnTER HEART");
         if ((UnitSpawnManager.instance.enemyLayerMask.value & (1 << other.gameObject.layer)) > 0)
         {
+
             Debug.Log("Enemy Got To heart");
+            GenericTrackWalker walkerScript = UtilityScript.RecursevlyLookForWalkerClass(other.transform);
+            walkerScript.Die(true);
+            GameController.instance.EnemyReachedHeart();
            // IDamagableInterface unit = UtilityScript.RecursevlyLookForInterface(other.transform);
         }
     }
